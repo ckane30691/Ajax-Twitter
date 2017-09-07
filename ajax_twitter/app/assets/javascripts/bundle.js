@@ -68,10 +68,20 @@
 /***/ (function(module, exports, __webpack_require__) {
 
 const FollowToggle = __webpack_require__(1);
+const UsersSearch = __webpack_require__(3);
+const TweetCompose = __webpack_require__(4);
 
 $( () => {
   $(".follow-toggle").each((idx, el) => {
     const toggle = new FollowToggle(el);
+  });
+
+  $(".users-search").each((idx, el) => {
+    const search = new UsersSearch(el);
+  });
+
+  $(".tweet-compose").each((idx, el) => {
+    const compose = new TweetCompose(el);
   });
 });
 
@@ -83,10 +93,11 @@ $( () => {
 const APIUtil = __webpack_require__(2);
 
 class FollowToggle {
-  constructor(el) {
+  constructor(el, options) {
     this.$el = $(el);
-    this.userId = this.$el.attr('data-user-id');
-    this.followState = this.$el.attr('data-initial-follow-state');
+    this.userId = this.$el.data('user-id') || options.userId;
+    this.followState = (this.$el.data('initial-follow-state') ||
+                        options.followState);
     this.render();
     this.handleClick();
   }
@@ -112,7 +123,7 @@ class FollowToggle {
   }
 
   handleClick() {
-    $(".follow-toggle").on("click", e => {
+    this.$el.on("click", e => {
       e.preventDefault();
       if (this.followState === "unfollowed") {
         this.followState = "following";
@@ -139,7 +150,7 @@ const APIUtil = {
     return $.ajax({
       type: 'POST',
       dataType: 'JSON',
-      url: `/users/${id}/follow`,
+      url: `/users/${id}/follow`
     });
   },
 
@@ -147,14 +158,138 @@ const APIUtil = {
     return $.ajax({
       type: 'DELETE',
       dataType: 'JSON',
-      url: `/users/${id}/follow`,
+      url: `/users/${id}/follow`
+    });
+  },
+
+  searchUsers: (queryVal, success) => {
+    return $.ajax({
+      type: 'GET',
+      dataType: 'JSON',
+      url: `/users/search?query=${queryVal}`,
+      success(data) {
+        success(data);
+      }
+    });
+  },
+
+  createTweet: (tweetData, success) => {
+    return $.ajax({
+      type: 'POST',
+      dataType: 'JSON',
+      url: `/tweets`,
+      data: tweetData,
+      success(data) {
+        success(data);
+      }
     });
   }
 };
 
-
-
 module.exports = APIUtil;
+
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+const APIUtil = __webpack_require__(2);
+const FollowToggle = __webpack_require__(1);
+
+class UsersSearch {
+  constructor(el) {
+    this.$el = $(el);
+    this.$input = this.$el.find("input");
+    this.$ul = $(".users");
+    this.handleInput();
+  }
+
+  handleInput() {
+    let that = this;
+    this.$input.on('input', (e) => {
+      const search = $(e.currentTarget).val();
+      APIUtil.searchUsers(search, this.renderResults.bind(this));
+    });
+  }
+
+  renderResults (matchingUsers) {
+    this.$ul.empty();
+    $(matchingUsers).each((idx, el) => {
+      const $li = $(`<li>`);
+      const $a = $('<a>');
+      $a.attr("href", `/users/${el.id}`).append(el.username);
+      $li.append($a);
+      const $button = $("<input>").attr("type", "submit").attr("class", "follow-toggle");
+      const followState = el.followed ? "followed" : "unfollowed";
+      const $toggle = new FollowToggle($button, { userId: el.id, followState: followState });
+      $li.append($button);
+      this.$ul.append($li);
+    });
+  }
+}
+
+module.exports = UsersSearch;
+
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
+
+const APIUtil = __webpack_require__(2);
+
+class TweetCompose {
+  constructor(el) {
+    this.$el = $(el);
+    this.submit();
+    this.charLimit();
+    this.addMentionUser();
+  }
+
+  submit() {
+    this.$el.on("submit", e => {
+      e.preventDefault();
+      const data = this.$el.serializeJSON();
+      $(":input").prop("disabled");
+      APIUtil.createTweet(data, this.handleSuccess.bind(this));
+    });
+  }
+
+  clearInput() {
+    $(":input").val("");
+  }
+
+  handleSuccess(res) {
+    this.clearInput();
+    $(":input").removeProp();
+    const tweet = JSON.stringify(res);
+    const feedId = this.$el.data('tweets-ul');
+    const $ul = $(feedId);
+    const $li = $('<li>').append(tweet);
+    $ul.append($li);
+  }
+
+  charLimit() {
+    const $textarea = this.$el.find("textarea");
+    let total = 0;
+    $textarea.on("input",  (e) => {
+      total += 1;
+      const $charsLeft = $('.chars-left');
+      $charsLeft.text(`${140 - total} characters left`);
+    });
+  }
+
+  addMentionUser() {
+    $('.add-mentioned-user').click((e) => {
+      e.preventDefault();
+      const $scriptTag = this.$el.find("script");
+      const $html = $scriptTag.html();
+      $(".mentioned-users").append($html);
+      return false;
+    });
+  }
+}
+
+module.exports = TweetCompose;
 
 
 /***/ })
